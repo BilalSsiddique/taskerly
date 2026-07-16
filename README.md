@@ -1,98 +1,288 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Taskerly
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Taskerly is a standalone task and plan tracker for personal engineering work across multiple repositories. It is designed to answer one practical question quickly:
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+> What should I work on next, what was the plan, and where exactly did I stop?
 
-## Description
+The backend is built with **NestJS**, **Prisma**, and **PostgreSQL**. The planned frontend is **Next.js**. Taskerly has its own database.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Why It Exists
 
-## Project setup
+Engineering work often gets scattered across repo issues, scratch notes, PR descriptions, integration docs, and memory. That makes it expensive to restart a task after a context switch.
 
-```bash
-$ yarn install
+Taskerly keeps the operational pieces together:
+
+- Cross-repo tasks ranked by priority, status, and ordering.
+- Durable implementation plans with stable identity keys.
+- Version history for every plan edit.
+- Lightweight technical docs tied to the exact plan version they support.
+- Last-context breadcrumbs for resuming stale work without rereading everything.
+- External references to DevCurate, GitHub, Notion, PRs, issues, or any other useful link.
+
+## Core Concepts
+
+| Concept | Purpose |
+| --- | --- |
+| `Repo` | A named bucket for work, such as `mappetizer-backend` or `devcurate-api`. |
+| `Task` | A unit of pending or active work inside a repo. Tasks have status, priority, order, due dates, and a `lastContext` note. |
+| `Plan` | The current or historical implementation approach for a task. Usually one task has one active plan. A second plan means a real restart, not a small edit. |
+| `PlanVersion` | Append-only plan history. Every meaningful edit creates a new version with a short change summary. |
+| `Doc` | A self-contained technical document, such as an FE integration guide, architecture note, or API spec. |
+| `DocVersion` | Append-only document history. |
+| `PlanVersionDoc` | Links a plan version to supporting docs, optionally pinning the exact doc version that matched that plan. |
+| `TaskReference` | A loose external pointer to anything useful, without creating a database dependency on another system. |
+
+## Product Flow
+
+1. Create a repo if it does not already exist.
+2. Add a task with title, priority, and `BACKLOG` status.
+3. Paste an implementation plan.
+4. Taskerly creates a `Plan`, generates a stable identity key, and stores `PlanVersion` v1.
+5. Move the task into `IN_PROGRESS` and drag it into the right order.
+6. Write or attach supporting docs, such as an FE integration note.
+7. Link docs to the current plan version and pin the matching doc version.
+8. When the plan changes, create a new `PlanVersion` with a change summary.
+9. Before switching away, update `lastContext`.
+10. When reopening the task later, use `lastContext`, the current plan version, and linked docs to recover the full state quickly.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser["Next.js frontend"] --> API["NestJS API"]
+    API --> Auth["Better Auth"]
+    API --> Prisma["Prisma Client"]
+    Prisma --> Postgres[("PostgreSQL")]
+    Auth --> Postgres
 ```
 
-## Compile and run the project
+## Entity Relationship Diagram
 
-```bash
-# development
-$ yarn run start
+```mermaid
+erDiagram
+    User ||--o{ Repo : owns
+    User ||--o{ Task : owns
+    User ||--o{ Doc : owns
+    Repo ||--o{ Task : contains
+    Task ||--o{ Plan : has
+    Task ||--o{ TaskReference : references
+    Task ||--o{ Doc : drafts
+    Plan ||--o{ PlanVersion : iterates_as
+    PlanVersion ||--o{ PlanVersionDoc : links
+    PlanVersionDoc }o--|| Doc : points_to
+    PlanVersionDoc }o--o| DocVersion : pins_snapshot
+    Doc ||--o{ DocVersion : has_history
 
-# watch mode
-$ yarn run start:dev
+    Repo {
+        uuid id
+        string userId
+        string name
+        string slug
+        float order
+        datetime deletedAt
+    }
 
-# production mode
-$ yarn run start:prod
+    Task {
+        uuid id
+        string userId
+        uuid repoId
+        string title
+        enum status
+        enum priority
+        float order
+        text lastContext
+        json metadata
+        datetime dueAt
+        datetime deletedAt
+    }
+
+    Plan {
+        uuid id
+        uuid taskId
+        string identityKey
+        string title
+        enum status
+        datetime deletedAt
+    }
+
+    PlanVersion {
+        uuid id
+        uuid planId
+        int versionNumber
+        text content
+        string changeSummary
+        datetime createdAt
+    }
+
+    Doc {
+        uuid id
+        string userId
+        uuid taskId
+        string title
+        enum docType
+        datetime deletedAt
+    }
+
+    DocVersion {
+        uuid id
+        uuid docId
+        int versionNumber
+        text content
+        string changeSummary
+    }
 ```
 
-## Run tests
+## Task Lifecycle
 
-```bash
-# unit tests
-$ yarn run test
-
-# e2e tests
-$ yarn run test:e2e
-
-# test coverage
-$ yarn run test:cov
+```mermaid
+stateDiagram-v2
+    [*] --> BACKLOG
+    BACKLOG --> PLANNED
+    PLANNED --> IN_PROGRESS
+    IN_PROGRESS --> BLOCKED
+    BLOCKED --> IN_PROGRESS
+    IN_PROGRESS --> DONE
+    PLANNED --> ABANDONED
+    IN_PROGRESS --> ABANDONED
+    BLOCKED --> ABANDONED
+    DONE --> [*]
+    ABANDONED --> [*]
 ```
 
-## Deployment
+## Plan And Doc Versioning
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+```mermaid
+sequenceDiagram
+    participant You
+    participant Task
+    participant Plan
+    participant PlanVersion
+    participant Doc as Doc
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
+    You->>Task: Create task in repo
+    You->>Plan: Paste initial plan
+    Plan->>PlanVersion: Create v1 with identity key
+    You->>Doc: Write FE integration doc
+    You->>PlanVersion: Link doc as FE_INTEGRATION and pin DocVersion v1
+    Note over You,PlanVersion: Plan changes
+    You->>PlanVersion: Create v2 with change summary
+    PlanVersion-->>PlanVersion: Carry doc links forward
+    You->>Doc: Update doc for new approach
+    You->>PlanVersion: Re-pin DocVersion v2 on current plan version
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Data Model Decisions
 
-## Resources
+- Soft deletes on `Repo`, `Task`, `Plan`, and `Doc` preserve history while keeping normal views clean.
+- Float `order` fields support drag-and-drop insertion between siblings without rewriting every row.
+- `Plan.identityKey` is unique and stable so external docs and PRs can link back to a precise plan.
+- `PlanVersion` and `DocVersion` are append-only history tables.
+- Current plan and doc versions are derived from the highest `versionNumber`, avoiding a mutable `isCurrent` flag.
+- `Doc.userId` and optional `Doc.taskId` are enforced with real Prisma relations.
+- `Task.metadata` provides a small JSON extension point for labels, external IDs, and future fields.
+- Query-shaped indexes support common views such as tasks by repo order, user status, due date, and soft-delete state.
+- `TaskReference` intentionally avoids foreign keys to external systems.
+- Auth tables mirror the existing DevCurate provider pattern.
 
-Check out a few resources that may come in handy when working with NestJS:
+## Current Backend Stack
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+- NestJS 11
+- Prisma 7
+- PostgreSQL 15 through Docker Compose
+- Better Auth
+- Swagger in non-production environments
+- Global validation through Nest `ValidationPipe`
 
-## Support
+## Local Development
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Prerequisites
 
-## Stay in touch
+- Node.js
+- Yarn
+- Docker
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### Environment
 
-## License
+Copy `.env.example` to `.env` and fill in the local values:
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5431/taskerly_db"
+BETTER_AUTH_SECRET="replace-with-a-local-secret"
+BETTER_AUTH_URL="http://localhost:3002"
+FRONTEND_URL="http://localhost:3000"
+CORS_ORIGIN="http://localhost:3000"
+GITHUB_CLIENT_ID="your-github-client-id"
+GITHUB_CLIENT_SECRET="your-github-client-secret"
+PORT=3002
+```
+
+### Install Dependencies
+
+```bash
+yarn install
+```
+
+### Start Postgres
+
+```bash
+docker compose up -d
+```
+
+### Run Migrations
+
+```bash
+yarn prisma migrate dev
+```
+
+If your Yarn setup does not expose Prisma directly, use:
+
+```bash
+yarn exec prisma migrate dev
+```
+
+### Start The API
+
+```bash
+yarn start:dev
+```
+
+The API runs at:
+
+- API: `http://localhost:3002/api`
+- Swagger: `http://localhost:3002/docs`
+
+## Scripts
+
+| Command | Description |
+| --- | --- |
+| `yarn start:dev` | Start the NestJS API in watch mode. |
+| `yarn build` | Compile the backend. |
+| `yarn test` | Run unit tests. |
+| `yarn test:e2e` | Run e2e tests. |
+| `yarn test:cov` | Run test coverage. |
+| `yarn lint` | Run ESLint with fixes. |
+| `yarn format` | Format source and test files. |
+
+## Roadmap
+
+### Foundation
+
+- Build CRUD APIs for repos, tasks, plans, plan versions, docs, doc versions, and references.
+- Add DTOs, validation, auth guards, and ownership checks.
+- Add service-level tests for versioning and authorization boundaries.
+- Generate OpenAPI documentation from the NestJS controllers.
+
+### Productivity Views
+
+- Cross-repo "what should I work on now" view.
+- Staleness indicators based on last activity and `lastContext`.
+- Due-soon and overdue task filters.
+- Pinned repos and tasks.
+- Full-text search across plan and doc versions.
+
+### Planning Intelligence
+
+- Blocked-by and related-task links.
+- Task activity timeline for status, priority, repo, and context changes.
+- Task templates for repeated implementation workflows.
+- Reminder or digest support for due work.
