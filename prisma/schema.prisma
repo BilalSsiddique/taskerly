@@ -1,0 +1,330 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider     = "prisma-client-js"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum TaskStatus {
+  BACKLOG
+  PLANNED
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  ABANDONED
+}
+
+enum PriorityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum PlanStatus {
+  ACTIVE // current approach for the task
+  SUPERSEDED // replaced by a newer Plan on the same task
+  ABANDONED
+}
+
+enum DocType {
+  FE_INTEGRATION
+  ARCHITECTURE
+  API_SPEC
+  OTHER
+}
+
+enum PlanDocRole {
+  FE_INTEGRATION
+  ARCHITECTURE
+  OTHER
+}
+
+enum TaskReferenceSourceType {
+  DEVCURATE_RESOURCE
+  GITHUB_PR
+  GITHUB_ISSUE
+  EXTERNAL_LINK
+  OTHER
+}
+
+// ============================================================
+// AUTH — 
+// ============================================================
+
+model User {
+  id            String   @id
+  name          String
+  email         String
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+  isActive      Boolean? @default(true)
+
+  sessions Session[]
+  accounts Account[]
+
+  repos Repo[]
+  tasks Task[]
+  docs  Doc[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@map("verification")
+}
+
+// ============================================================
+// REPO
+// ============================================================
+
+model Repo {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Text
+  name        String    @db.VarChar(200)
+  slug        String    @db.VarChar(200)
+  description String?   @db.Text
+  color       String?   @db.VarChar(7)
+  order       Float     @default(1000) @db.DoublePrecision
+  isPinned    Boolean   @default(false) @map("is_pinned")
+  pinnedAt    DateTime? @map("pinned_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks Task[]
+
+  @@unique([userId, slug])
+  @@index([userId])
+  @@index([userId, deletedAt])
+  @@index([userId, order])
+  @@map("repos")
+}
+
+// ============================================================
+// TASK
+// ============================================================
+
+model Task {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String        @map("user_id") @db.Text
+  repoId      String        @map("repo_id") @db.Uuid
+  title       String        @db.VarChar(500)
+  description String?       @db.Text
+  status      TaskStatus    @default(BACKLOG)
+  priority    PriorityLevel @default(MEDIUM)
+  order       Float         @default(1000) @db.DoublePrecision
+  lastContext String?       @map("last_context") @db.Text
+  metadata    Json          @default("{}")
+  dueAt       DateTime?     @map("due_at") @db.Timestamptz
+  startedAt   DateTime?     @map("started_at") @db.Timestamptz
+  completedAt DateTime?     @map("completed_at") @db.Timestamptz
+  isPinned    Boolean       @default(false) @map("is_pinned")
+  pinnedAt    DateTime?     @map("pinned_at") @db.Timestamptz
+  deletedAt   DateTime?     @map("deleted_at") @db.Timestamptz
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repo       Repo            @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  plans      Plan[]
+  references TaskReference[]
+  docs       Doc[]
+
+  @@index([userId])
+  @@index([repoId])
+  @@index([repoId, order])
+  @@index([repoId, deletedAt])
+  @@index([status])
+  @@index([priority])
+  @@index([userId, status])
+  @@index([userId, deletedAt])
+  @@index([isPinned])
+  @@index([dueAt])
+  @@map("tasks")
+}
+
+// ============================================================
+// TASK REFERENCE — loose pointer to anything external
+// ============================================================
+
+model TaskReference {
+  id         String                   @id @default(uuid()) @db.Uuid
+  taskId     String                   @map("task_id") @db.Uuid
+  sourceType TaskReferenceSourceType  @map("source_type")
+  label      String                   @db.VarChar(300)
+  url        String?                  @db.VarChar(1000)
+  note       String?                  @db.Text
+  createdAt  DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([sourceType])
+  @@map("task_references")
+}
+
+// ============================================================
+// PLAN
+// ============================================================
+
+model Plan {
+  id          String     @id @default(uuid()) @db.Uuid
+  taskId      String     @map("task_id") @db.Uuid
+  identityKey String     @unique @map("identity_key") @db.VarChar(50)
+  title       String     @db.VarChar(500)
+  status      PlanStatus @default(ACTIVE)
+  deletedAt   DateTime?  @map("deleted_at") @db.Timestamptz
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+
+  task     Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  versions PlanVersion[]
+
+  @@index([taskId])
+  @@index([status])
+  @@map("plans")
+}
+
+// ============================================================
+// PLAN VERSION — append-only history
+// ============================================================
+
+model PlanVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  planId        String   @map("plan_id") @db.Uuid
+  versionNumber Int      @map("version_number")
+  content       String   @db.Text
+  changeSummary String?  @map("change_summary") @db.VarChar(500)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  plan     Plan             @relation(fields: [planId], references: [id], onDelete: Cascade)
+  docLinks PlanVersionDoc[]
+
+  @@unique([planId, versionNumber])
+  @@index([planId, createdAt])
+  @@map("plan_versions")
+}
+
+// ============================================================
+// DOC — self-contained doc store (FE integration / architecture)
+// ============================================================
+
+model Doc {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Text
+  taskId    String?   @map("task_id") @db.Uuid
+  title     String    @db.VarChar(500)
+  docType   DocType   @default(OTHER) @map("doc_type")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  versions       DocVersion[]
+  planVersionUse PlanVersionDoc[]
+
+  @@index([userId])
+  @@index([taskId])
+  @@index([docType])
+  @@map("docs")
+}
+
+// ============================================================
+// DOC VERSION — append-only history, mirrors PlanVersion
+// ============================================================
+
+model DocVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  docId         String   @map("doc_id") @db.Uuid
+  versionNumber Int      @map("version_number")
+  content       String   @db.Text
+  changeSummary String?  @map("change_summary") @db.VarChar(500)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  doc          Doc              @relation(fields: [docId], references: [id], onDelete: Cascade)
+  pinnedByPlan PlanVersionDoc[]
+
+  @@unique([docId, versionNumber])
+  @@index([docId, createdAt])
+  @@map("doc_versions")
+}
+
+// ============================================================
+// PLAN VERSION DOC — join: which docs back a plan version,
+// optionally pinned to an exact DocVersion snapshot.
+// ============================================================
+
+model PlanVersionDoc {
+  id            String      @id @default(uuid()) @db.Uuid
+  planVersionId String      @map("plan_version_id") @db.Uuid
+  docId         String      @map("doc_id") @db.Uuid
+  docVersionId  String?     @map("doc_version_id") @db.Uuid // null = always latest
+  role          PlanDocRole @default(OTHER)
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  planVersion PlanVersion @relation(fields: [planVersionId], references: [id], onDelete: Cascade)
+  doc         Doc         @relation(fields: [docId], references: [id], onDelete: Cascade)
+  docVersion  DocVersion? @relation(fields: [docVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([planVersionId, docId, role])
+  @@index([planVersionId])
+  @@index([docId])
+  @@map("plan_version_docs")
+}
