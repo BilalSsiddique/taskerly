@@ -17,6 +17,7 @@ export const auth = betterAuth({
     github: {
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+      callbackURL: 'http://localhost:3001/app',
     },
   },
   session: {
@@ -28,9 +29,9 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins: [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
+    process.env.FRONTEND_URL || 'http://localhost:3001',
+    'http://localhost:3001',
+    'http://127.0.0.1:3001',
   ],
   secret: process.env.BETTER_AUTH_SECRET,
 });
