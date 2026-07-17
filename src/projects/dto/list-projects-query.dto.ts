@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ProjectCategory } from '@prisma/client';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsOptional, IsUUID } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 const toBoolean = (value: unknown) => {
@@ -27,15 +28,15 @@ const toBoolean = (value: unknown) => {
   return value;
 };
 
-export class ListReposQueryDto extends PaginationQueryDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsUUID()
-  projectId?: string;
-
+export class ListProjectsQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional()
   @IsOptional()
   @Transform(({ value }) => toBoolean(value))
   @IsBoolean()
   isPinned?: boolean;
+
+  @ApiPropertyOptional({ enum: ProjectCategory })
+  @IsOptional()
+  @IsEnum(ProjectCategory)
+  category?: ProjectCategory;
 }

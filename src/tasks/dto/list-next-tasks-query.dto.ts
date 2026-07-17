@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { PriorityLevel, TaskStatus } from '@prisma/client';
+import { PriorityLevel, ProjectCategory, TaskStatus } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
@@ -82,6 +82,11 @@ export class ListNextTasksQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   repoId?: string;
+
+  @ApiPropertyOptional({ enum: ProjectCategory })
+  @IsOptional()
+  @IsEnum(ProjectCategory)
+  projectCategory?: ProjectCategory;
 
   @ApiPropertyOptional({ enum: DueFilter, default: DueFilter.ANY })
   @IsOptional()

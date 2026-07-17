@@ -57,6 +57,11 @@ enum TaskReferenceSourceType {
   OTHER
 }
 
+enum ProjectCategory {
+  WORK
+  PERSONAL
+}
+
 // ============================================================
 // AUTH — 
 // ============================================================
@@ -74,9 +79,10 @@ model User {
   sessions Session[]
   accounts Account[]
 
-  repos Repo[]
-  tasks Task[]
-  docs  Doc[]
+  projects Project[]
+  repos    Repo[]
+  tasks    Task[]
+  docs     Doc[]
 
   @@unique([email])
   @@map("user")
@@ -128,12 +134,43 @@ model Verification {
 }
 
 // ============================================================
+// PROJECT
+// ============================================================
+
+model Project {
+  id          String          @id @default(uuid()) @db.Uuid
+  userId      String          @map("user_id") @db.Text
+  name        String          @db.VarChar(200)
+  slug        String          @db.VarChar(200)
+  description String?         @db.Text
+  category    ProjectCategory @default(WORK)
+  color       String?         @db.VarChar(7)
+  order       Float           @default(1000) @db.DoublePrecision
+  isPinned    Boolean         @default(false) @map("is_pinned")
+  pinnedAt    DateTime?       @map("pinned_at") @db.Timestamptz
+  deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repos Repo[]
+
+  @@unique([userId, slug])
+  @@index([userId])
+  @@index([userId, category])
+  @@index([userId, deletedAt])
+  @@index([userId, order])
+  @@map("projects")
+}
+
+// ============================================================
 // REPO
 // ============================================================
 
 model Repo {
   id          String    @id @default(uuid()) @db.Uuid
   userId      String    @map("user_id") @db.Text
+  projectId   String    @map("project_id") @db.Uuid
   name        String    @db.VarChar(200)
   slug        String    @db.VarChar(200)
   description String?   @db.Text
@@ -145,11 +182,14 @@ model Repo {
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tasks Task[]
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
 
-  @@unique([userId, slug])
+  @@unique([projectId, slug])
   @@index([userId])
+  @@index([projectId])
+  @@index([projectId, order])
   @@index([userId, deletedAt])
   @@index([userId, order])
   @@map("repos")
@@ -169,6 +209,7 @@ model Task {
   priority    PriorityLevel @default(MEDIUM)
   order       Float         @default(1000) @db.DoublePrecision
   lastContext String?       @map("last_context") @db.Text
+  lastContextUpdatedAt DateTime? @map("last_context_updated_at") @db.Timestamptz
   metadata    Json          @default("{}")
   dueAt       DateTime?     @map("due_at") @db.Timestamptz
   startedAt   DateTime?     @map("started_at") @db.Timestamptz
@@ -193,6 +234,7 @@ model Task {
   @@index([priority])
   @@index([userId, status])
   @@index([userId, deletedAt])
+  @@index([userId, lastContextUpdatedAt])
   @@index([isPinned])
   @@index([dueAt])
   @@map("tasks")

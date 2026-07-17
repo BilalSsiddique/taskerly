@@ -37,7 +37,7 @@ async function bootstrap() {
     origin:
       process.env.NODE_ENV === 'production'
         ? process.env.CORS_ORIGIN
-        : (process.env.FRONTEND_URL ?? 'http://localhost:3000'),
+        : (process.env.FRONTEND_URL ?? 'http://localhost:3003'),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
   });
