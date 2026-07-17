@@ -21,16 +21,16 @@ Taskerly keeps the operational pieces together:
 
 ## Core Concepts
 
-| Concept | Purpose |
-| --- | --- |
-| `Repo` | A named bucket for work, such as `mappetizer-backend` or `devcurate-api`. |
-| `Task` | A unit of pending or active work inside a repo. Tasks have status, priority, order, due dates, and a `lastContext` note. |
-| `Plan` | The current or historical implementation approach for a task. Usually one task has one active plan. A second plan means a real restart, not a small edit. |
-| `PlanVersion` | Append-only plan history. Every meaningful edit creates a new version with a short change summary. |
-| `Doc` | A self-contained technical document, such as an FE integration guide, architecture note, or API spec. |
-| `DocVersion` | Append-only document history. |
-| `PlanVersionDoc` | Links a plan version to supporting docs, optionally pinning the exact doc version that matched that plan. |
-| `TaskReference` | A loose external pointer to anything useful, without creating a database dependency on another system. |
+| Concept          | Purpose                                                                                                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Repo`           | A named bucket for work, such as `mappetizer-backend` or `devcurate-api`.                                                                                 |
+| `Task`           | A unit of pending or active work inside a repo. Tasks have status, priority, order, due dates, and a `lastContext` note.                                  |
+| `Plan`           | The current or historical implementation approach for a task. Usually one task has one active plan. A second plan means a real restart, not a small edit. |
+| `PlanVersion`    | Append-only plan history. Every meaningful edit creates a new version with a short change summary.                                                        |
+| `Doc`            | A self-contained technical document, such as an FE integration guide, architecture note, or API spec.                                                     |
+| `DocVersion`     | Append-only document history.                                                                                                                             |
+| `PlanVersionDoc` | Links a plan version to supporting docs, optionally pinning the exact doc version that matched that plan.                                                 |
+| `TaskReference`  | A loose external pointer to anything useful, without creating a database dependency on another system.                                                    |
 
 ## Product Flow
 
@@ -253,15 +253,15 @@ The API runs at:
 
 ## Scripts
 
-| Command | Description |
-| --- | --- |
+| Command          | Description                         |
+| ---------------- | ----------------------------------- |
 | `yarn start:dev` | Start the NestJS API in watch mode. |
-| `yarn build` | Compile the backend. |
-| `yarn test` | Run unit tests. |
-| `yarn test:e2e` | Run e2e tests. |
-| `yarn test:cov` | Run test coverage. |
-| `yarn lint` | Run ESLint with fixes. |
-| `yarn format` | Format source and test files. |
+| `yarn build`     | Compile the backend.                |
+| `yarn test`      | Run unit tests.                     |
+| `yarn test:e2e`  | Run e2e tests.                      |
+| `yarn test:cov`  | Run test coverage.                  |
+| `yarn lint`      | Run ESLint with fixes.              |
+| `yarn format`    | Format source and test files.       |
 
 ## Roadmap
 
@@ -280,9 +280,3 @@ The API runs at:
 - Pinned repos and tasks.
 - Full-text search across plan and doc versions.
 
-### Planning Intelligence
-
-- Blocked-by and related-task links.
-- Task activity timeline for status, priority, repo, and context changes.
-- Task templates for repeated implementation workflows.
-- Reminder or digest support for due work.
