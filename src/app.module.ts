@@ -9,6 +9,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { DocsModule } from './docs/docs.module';
 import { PlansModule } from './plans/plans.module';
+import { ProjectsModule } from './projects/projects.module';
 import { ReposModule } from './repos/repos.module';
 import { TaskReferencesModule } from './task-references/task-references.module';
 import { TasksModule } from './tasks/tasks.module';
@@ -21,6 +22,7 @@ import { TasksModule } from './tasks/tasks.module';
       load: [configuration],
     }),
     AuthModule.forRoot({ auth }),
+    ProjectsModule,
     ReposModule,
     TasksModule,
     PlansModule,

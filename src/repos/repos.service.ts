@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProjectsService } from '../projects/projects.service';
 import { slugify } from '../common/utils/slug';
 import { CreateRepoDto } from './dto/create-repo.dto';
 import { ListReposQueryDto } from './dto/list-repos-query.dto';
@@ -12,15 +13,21 @@ import { UpdateRepoDto } from './dto/update-repo.dto';
 
 @Injectable()
 export class ReposService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly projectsService: ProjectsService,
+  ) {}
 
   async create(userId: string, dto: CreateRepoDto) {
+    await this.projectsService.ensureProjectOwned(userId, dto.projectId);
+
     const slug = slugify(dto.name);
 
     try {
       return await this.prisma.repo.create({
         data: {
           userId,
+          projectId: dto.projectId,
           name: dto.name,
           slug,
           description: dto.description,
@@ -28,13 +35,16 @@ export class ReposService {
           isPinned: dto.isPinned ?? false,
           pinnedAt: dto.isPinned ? new Date() : null,
         },
+        include: { project: true },
       });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new ConflictException('A repo with this slug already exists');
+        throw new ConflictException(
+          'A repo with this slug already exists in this project',
+        );
       }
 
       throw error;
@@ -44,6 +54,7 @@ export class ReposService {
   async list(userId: string, query: ListReposQueryDto) {
     const where: Prisma.RepoWhereInput = {
       userId,
+      projectId: query.projectId,
       deletedAt: null,
       isPinned: query.isPinned,
     };
@@ -51,6 +62,7 @@ export class ReposService {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.repo.findMany({
         where,
+        include: { project: true },
         orderBy: [
           { isPinned: 'desc' },
           { order: 'asc' },
@@ -69,6 +81,7 @@ export class ReposService {
     const repo = await this.prisma.repo.findFirst({
       where: { id, userId, deletedAt: null },
       include: {
+        project: true,
         tasks: {
           where: { deletedAt: null },
           orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
@@ -84,9 +97,14 @@ export class ReposService {
   }
 
   async update(userId: string, id: string, dto: UpdateRepoDto) {
-    await this.getById(userId, id);
+    const repo = await this.getById(userId, id);
+
+    if (dto.projectId && dto.projectId !== repo.projectId) {
+      await this.projectsService.ensureProjectOwned(userId, dto.projectId);
+    }
 
     const data: Prisma.RepoUpdateInput = {
+      project: dto.projectId ? { connect: { id: dto.projectId } } : undefined,
       name: dto.name,
       description: dto.description,
       color: dto.color,
@@ -102,13 +120,19 @@ export class ReposService {
     }
 
     try {
-      return await this.prisma.repo.update({ where: { id }, data });
+      return await this.prisma.repo.update({
+        where: { id },
+        data,
+        include: { project: true },
+      });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new ConflictException('A repo with this slug already exists');
+        throw new ConflictException(
+          'A repo with this slug already exists in this project',
+        );
       }
 
       throw error;

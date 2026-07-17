@@ -7,6 +7,7 @@ export type TaskSignalSource = {
   dueAt: Date | string | null;
   updatedAt: Date | string;
   lastContext: string | null;
+  lastContextUpdatedAt?: Date | string | null;
   latestPlanVersionAt?: Date | string | null;
   latestDocVersionAt?: Date | string | null;
   latestReferenceAt?: Date | string | null;
@@ -67,6 +68,9 @@ export function computeTaskSignals(
   const latestReferenceAt = source.latestReferenceAt
     ? new Date(source.latestReferenceAt)
     : null;
+  const lastContextUpdatedAt = source.lastContextUpdatedAt
+    ? new Date(source.lastContextUpdatedAt)
+    : null;
 
   const lastActivityAt = [
     updatedAt,
@@ -81,6 +85,9 @@ export function computeTaskSignals(
   const tomorrow = addDays(today, 1);
   const nextWeek = addDays(today, 7);
   const daysSinceTaskUpdate = differenceInCalendarDays(now, updatedAt);
+  const daysSinceLastContextUpdate = lastContextUpdatedAt
+    ? differenceInCalendarDays(now, lastContextUpdatedAt)
+    : null;
   const daysUntilDue = dueAt ? differenceInCalendarDays(dueAt, now) : null;
   const isActive = ACTIVE_STALE_STATUSES.has(source.status);
   const hasContext = Boolean(source.lastContext?.trim());
@@ -93,7 +100,11 @@ export function computeTaskSignals(
 
   if (isActive && !hasContext) {
     staleReason = 'NO_CONTEXT';
-  } else if (isActive && daysSinceTaskUpdate >= TASK_STALE_DAYS) {
+  } else if (
+    isActive &&
+    daysSinceLastContextUpdate !== null &&
+    daysSinceLastContextUpdate >= TASK_STALE_DAYS
+  ) {
     staleReason = 'OLD_CONTEXT';
   } else if (
     PLAN_STALE_STATUSES.has(source.status) &&
@@ -110,7 +121,7 @@ export function computeTaskSignals(
     isStale: staleReason !== null,
     staleReason,
     daysSinceTaskUpdate,
-    daysSinceLastContextUpdate: hasContext ? daysSinceTaskUpdate : null,
+    daysSinceLastContextUpdate: hasContext ? daysSinceLastContextUpdate : null,
     daysUntilDue,
     lastActivityAt,
   };

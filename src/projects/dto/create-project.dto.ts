@@ -1,20 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ProjectCategory } from '@prisma/client';
 import {
   IsBoolean,
+  IsEnum,
   IsHexColor,
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUUID,
   MaxLength,
 } from 'class-validator';
 
-export class CreateRepoDto {
-  @ApiProperty({ example: '8e7fb5a1-9565-4a5f-9e85-4f8f5f9f0f5c' })
-  @IsUUID()
-  projectId: string;
-
-  @ApiProperty({ example: 'mappetizer-backend' })
+export class CreateProjectDto {
+  @ApiProperty({ example: 'Mappetizer' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
@@ -24,6 +21,11 @@ export class CreateRepoDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ enum: ProjectCategory, default: ProjectCategory.WORK })
+  @IsOptional()
+  @IsEnum(ProjectCategory)
+  category?: ProjectCategory;
 
   @ApiPropertyOptional({ example: '#2563eb' })
   @IsOptional()

@@ -45,6 +45,29 @@ Taskerly keeps the operational pieces together:
 9. Before switching away, update `lastContext`.
 10. When reopening the task later, use `lastContext`, the current plan version, and linked docs to recover the full state quickly.
 
+
+## Taskerly Frontend Views
+
+#### DASHBOARD VIEW
+
+![DASHBAORD](Taskerly-dashboard-view.png)
+
+#### TASKERLY WORKBENCH VIEW
+
+![WORKBENCH](Taskerly.png)
+
+
+#### TASKERLY PLAN VIEW
+
+![WORKBENCH](Taskerly-plan-view.png)
+
+
+#### TASKERLY DOC VIEW
+
+![WORKBENCH](Taskerly-workbench-doc-view.png)
+
+
+
 ## Architecture
 
 ```mermaid
@@ -60,9 +83,11 @@ flowchart LR
 
 ```mermaid
 erDiagram
+    User ||--o{ Project : owns
     User ||--o{ Repo : owns
     User ||--o{ Task : owns
     User ||--o{ Doc : owns
+    Project ||--o{ Repo : contains
     Repo ||--o{ Task : contains
     Task ||--o{ Plan : has
     Task ||--o{ TaskReference : references
@@ -73,9 +98,20 @@ erDiagram
     PlanVersionDoc }o--o| DocVersion : pins_snapshot
     Doc ||--o{ DocVersion : has_history
 
+    Project {
+        uuid id
+        string userId
+        string name
+        string slug
+        enum category
+        float order
+        datetime deletedAt
+    }
+
     Repo {
         uuid id
         string userId
+        uuid projectId
         string name
         string slug
         float order
@@ -91,9 +127,18 @@ erDiagram
         enum priority
         float order
         text lastContext
+        datetime lastContextUpdatedAt
         json metadata
         datetime dueAt
         datetime deletedAt
+    }
+
+    TaskReference {
+        uuid id
+        uuid taskId
+        enum sourceType
+        string label
+        string url
     }
 
     Plan {
@@ -130,6 +175,15 @@ erDiagram
         text content
         string changeSummary
     }
+
+    PlanVersionDoc {
+        uuid id
+        uuid planVersionId
+        uuid docId
+        uuid docVersionId
+        enum role
+    }
+
 ```
 
 ## Task Lifecycle

@@ -1,5 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PlanStatus, Prisma, PriorityLevel, TaskStatus } from '@prisma/client';
+import {
+  PlanStatus,
+  Prisma,
+  PriorityLevel,
+  ProjectCategory,
+  TaskStatus,
+} from '@prisma/client';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -34,7 +40,7 @@ const STATUS_WEIGHT: Record<TaskStatus, number> = {
 
 type NextTaskCandidate = Prisma.TaskGetPayload<{
   include: {
-    repo: true;
+    repo: { include: { project: true } };
     references: { orderBy: { createdAt: 'desc' }; take: 1 };
     docs: {
       where: { deletedAt: null };
@@ -65,7 +71,12 @@ type NextTaskItem = {
   repo: Pick<
     NextTaskCandidate['repo'],
     'id' | 'name' | 'slug' | 'color' | 'isPinned'
-  >;
+  > & {
+    project: Pick<
+      NextTaskCandidate['repo']['project'],
+      'id' | 'name' | 'slug' | 'category' | 'color'
+    >;
+  };
   currentPlan: {
     id: string;
     identityKey: string;
@@ -98,6 +109,7 @@ export class TasksService {
         status: dto.status ?? TaskStatus.BACKLOG,
         priority: dto.priority ?? PriorityLevel.MEDIUM,
         lastContext: dto.lastContext,
+        lastContextUpdatedAt: dto.lastContext?.trim() ? new Date() : null,
         dueAt: dto.dueAt,
         metadata: (dto.metadata ?? {}) as Prisma.InputJsonValue,
       },
@@ -129,7 +141,10 @@ export class TasksService {
     const where: Prisma.TaskWhereInput = {
       userId,
       deletedAt: null,
-      repo: { deletedAt: null },
+      repo: {
+        deletedAt: null,
+        project: { deletedAt: null, category: query.projectCategory },
+      },
       repoId: query.repoId,
       priority: query.priority?.length ? { in: query.priority } : undefined,
       status: query.status?.length
@@ -166,7 +181,7 @@ export class TasksService {
     const task = await this.prisma.task.findFirst({
       where: { id, userId, deletedAt: null },
       include: {
-        repo: true,
+        repo: { include: { project: true } },
         references: true,
         docs: {
           where: { deletedAt: null },
@@ -200,7 +215,7 @@ export class TasksService {
     const task = await this.prisma.task.findFirst({
       where: { id, userId, deletedAt: null },
       include: {
-        repo: true,
+        repo: { include: { project: true } },
         references: { orderBy: { createdAt: 'desc' } },
         docs: {
           where: { deletedAt: null },
@@ -243,6 +258,7 @@ export class TasksService {
       dueAt: task.dueAt,
       updatedAt: task.updatedAt,
       lastContext: task.lastContext,
+      lastContextUpdatedAt: task.lastContextUpdatedAt,
       latestPlanVersionAt: currentPlanVersion?.createdAt,
       latestDocVersionAt,
       latestReferenceAt: task.references[0]?.createdAt,
@@ -281,6 +297,10 @@ export class TasksService {
       metadata: dto.metadata as Prisma.InputJsonValue | undefined,
     };
 
+    if (dto.lastContext !== undefined && dto.lastContext !== task.lastContext) {
+      data.lastContextUpdatedAt = dto.lastContext.trim() ? new Date() : null;
+    }
+
     if (dto.status === TaskStatus.IN_PROGRESS && !task.startedAt) {
       data.startedAt = new Date();
     }
@@ -310,12 +330,21 @@ export class TasksService {
     });
   }
 
-  async getDashboardSummary(userId: string) {
+  async getDashboardSummary(userId: string, projectCategory?: ProjectCategory) {
+    const liveProjectWhere: Prisma.ProjectWhereInput = {
+      deletedAt: null,
+      category: projectCategory,
+    };
+    const liveRepoWhere: Prisma.RepoWhereInput = {
+      deletedAt: null,
+      project: liveProjectWhere,
+    };
+
     const openTasks = await this.prisma.task.findMany({
       where: {
         userId,
         deletedAt: null,
-        repo: { deletedAt: null },
+        repo: liveRepoWhere,
         status: { notIn: [TaskStatus.DONE, TaskStatus.ABANDONED] },
       },
       include: this.nextTaskInclude(),
@@ -329,14 +358,16 @@ export class TasksService {
           where: {
             userId,
             deletedAt: null,
-            repo: { deletedAt: null },
+            repo: liveRepoWhere,
             status: TaskStatus.DONE,
             completedAt: { gte: startOfWeek },
           },
         }),
-        this.prisma.repo.count({ where: { userId, deletedAt: null } }),
         this.prisma.repo.count({
-          where: { userId, deletedAt: null, isPinned: true },
+          where: { userId, ...liveRepoWhere },
+        }),
+        this.prisma.repo.count({
+          where: { userId, ...liveRepoWhere, isPinned: true },
         }),
       ]);
 
@@ -403,7 +434,7 @@ export class TasksService {
 
   private nextTaskInclude() {
     return {
-      repo: true,
+      repo: { include: { project: true } },
       references: { orderBy: { createdAt: 'desc' }, take: 1 },
       docs: {
         where: { deletedAt: null },
@@ -438,6 +469,7 @@ export class TasksService {
       dueAt: candidate.dueAt,
       updatedAt: candidate.updatedAt,
       lastContext: candidate.lastContext,
+      lastContextUpdatedAt: candidate.lastContextUpdatedAt,
       latestPlanVersionAt: currentVersion?.createdAt,
       latestDocVersionAt,
       latestReferenceAt: candidate.references[0]?.createdAt,
@@ -455,6 +487,13 @@ export class TasksService {
         slug: repo.slug,
         color: repo.color,
         isPinned: repo.isPinned,
+        project: {
+          id: repo.project.id,
+          name: repo.project.name,
+          slug: repo.project.slug,
+          category: repo.project.category,
+          color: repo.project.color,
+        },
       },
       currentPlan: activePlan
         ? {
